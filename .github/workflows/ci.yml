@@ -48,6 +48,7 @@ jobs:
           path: |
             **/target/surefire-reports/
             **/target/site/jacoco/
+
   scan-deps:
     needs: build-test
     runs-on: ubuntu-latest
@@ -55,10 +56,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Trivy fs
         run: |
-          docker run --rm -v "$PWD:/src" aquasec/trivy:0.58.1 fs \
-            --scanners vuln,secret,misconfig --severity HIGH,CRITICAL \
-            --ignore-unfixed --exit-code 1 \
+          T="docker run --rm -v $PWD:/src -v $HOME/.cache/trivy:/root/.cache/trivy aquasec/trivy:0.58.1"
+          # отчёт для артефакта (без падения), затем таблица в лог с кодом возврата
+          $T fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --ignore-unfixed \
             --format sarif --output /src/trivy-fs.sarif /src
+          $T fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --ignore-unfixed \
+            --format table --exit-code 1 /src
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -101,10 +104,11 @@ jobs:
           docker image ls "$IMAGE" --format '${{ matrix.service }} image size - {{.Size}}' | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Trivy image
         run: |
-          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/out" aquasec/trivy:0.58.1 image \
-            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
-            --format sarif --output /out/trivy-${{ matrix.service }}.sarif \
-            "$IMAGE:${{ github.sha }}"
+          T="docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v $PWD:/out -v $HOME/.cache/trivy:/root/.cache/trivy aquasec/trivy:0.58.1"
+          $T image --severity HIGH,CRITICAL --ignore-unfixed \
+            --format sarif --output /out/trivy-${{ matrix.service }}.sarif "$IMAGE:${{ github.sha }}"
+          $T image --severity HIGH,CRITICAL --ignore-unfixed \
+            --format table --exit-code 1 "$IMAGE:${{ github.sha }}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
