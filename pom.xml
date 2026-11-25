@@ -1,17 +1,11 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
-         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
     <groupId>ru.company</groupId>
     <artifactId>meeting-room-booking-system</artifactId>
     <version>1.0.0</version>
     <packaging>pom</packaging>
     <name>Meeting Room Booking System</name>
     <description>Microservices for meeting room booking management</description>
-
     <modules>
         <module>common</module>
         <module>api-gateway</module>
@@ -20,24 +14,22 @@
         <module>notification-service</module>
         <module>integration-service</module>
     </modules>
-
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.1.5</version>
+        <version>3.4.11</version>
         <relativePath/>
     </parent>
-
     <properties>
         <java.version>17</java.version>
-        <spring-cloud.version>2022.0.4</spring-cloud.version>
-        <testcontainers.version>1.19.1</testcontainers.version>
+        <spring-cloud.version>2024.0.2</spring-cloud.version>
+        <testcontainers.version>1.20.6</testcontainers.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <lombok.version>1.18.30</lombok.version>
         <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
-        <jacoco.version>0.8.11</jacoco.version>
+        <jacoco.version>0.8.12</jacoco.version>
+        <postgresql.version>42.7.11</postgresql.version>
     </properties>
-
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -47,13 +39,21 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-
             <dependency>
                 <groupId>com.company</groupId>
                 <artifactId>common</artifactId>
                 <version>${project.version}</version>
             </dependency>
-
+            <dependency>
+                <groupId>org.xerial.snappy</groupId>
+                <artifactId>snappy-java</artifactId>
+                <version>1.1.10.9</version>
+            </dependency>
+            <dependency>
+                <groupId>org.codehaus.jettison</groupId>
+                <artifactId>jettison</artifactId>
+                <version>1.5.4</version>
+            </dependency>
             <dependency>
                 <groupId>org.testcontainers</groupId>
                 <artifactId>junit-jupiter</artifactId>
@@ -76,7 +76,6 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
-
     <build>
         <pluginManagement>
             <plugins>
@@ -120,8 +119,6 @@
                 </plugin>
             </plugins>
         </pluginManagement>
-
-        <!-- Покрытие кода JaCoCo во всех модулях: отчёт в <модуль>/target/site/jacoco -->
         <plugins>
             <plugin>
                 <groupId>org.jacoco</groupId>
@@ -130,12 +127,16 @@
                 <executions>
                     <execution>
                         <id>prepare-agent</id>
-                        <goals><goal>prepare-agent</goal></goals>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
                     </execution>
                     <execution>
                         <id>report</id>
                         <phase>test</phase>
-                        <goals><goal>report</goal></goals>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>

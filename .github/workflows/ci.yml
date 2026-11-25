@@ -58,9 +58,9 @@ jobs:
         run: |
           T="docker run --rm -v $PWD:/src -v $HOME/.cache/trivy:/root/.cache/trivy aquasec/trivy:0.58.1"
           # отчёт для артефакта (без падения), затем таблица в лог с кодом возврата
-          $T fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --ignore-unfixed \
+          $T fs --ignorefile /src/.trivyignore --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --ignore-unfixed \
             --format sarif --output /src/trivy-fs.sarif /src
-          $T fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --ignore-unfixed \
+          $T fs --ignorefile /src/.trivyignore --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --ignore-unfixed \
             --format table --exit-code 1 /src
       - uses: actions/upload-artifact@v4
         if: always()
@@ -105,9 +105,9 @@ jobs:
       - name: Trivy image
         run: |
           T="docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v $PWD:/out -v $HOME/.cache/trivy:/root/.cache/trivy aquasec/trivy:0.58.1"
-          $T image --severity HIGH,CRITICAL --ignore-unfixed \
+          $T image --ignorefile /out/.trivyignore --severity HIGH,CRITICAL --ignore-unfixed \
             --format sarif --output /out/trivy-${{ matrix.service }}.sarif "$IMAGE:${{ github.sha }}"
-          $T image --severity HIGH,CRITICAL --ignore-unfixed \
+          $T image --ignorefile /out/.trivyignore --severity HIGH,CRITICAL --ignore-unfixed \
             --format table --exit-code 1 "$IMAGE:${{ github.sha }}"
       - uses: actions/upload-artifact@v4
         if: always()
@@ -127,7 +127,6 @@ jobs:
           docker tag "$IMAGE:${{ github.sha }}" "$IMAGE:latest"
           docker push "$IMAGE:${{ github.sha }}"
           docker push "$IMAGE:latest"
-
   smoke:
     needs: images
     runs-on: ubuntu-latest
