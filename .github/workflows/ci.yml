@@ -15,7 +15,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # 1. Линтинг Dockerfile
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -23,7 +22,6 @@ jobs:
       - name: hadolint
         run: docker run --rm -i hadolint/hadolint:v2.12.0 hadolint --failure-threshold warning - < Dockerfile
 
-  # 2. Сборка, модульные и интеграционные тесты (Testcontainers), покрытие JaCoCo
   build-test:
     needs: lint
     runs-on: ubuntu-latest
@@ -50,30 +48,23 @@ jobs:
           path: |
             **/target/surefire-reports/
             **/target/site/jacoco/
-
-  # 3. Сканирование зависимостей, секретов и конфигурации
   scan-deps:
     needs: build-test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Trivy fs
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: fs
-          scanners: vuln,secret,misconfig
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-          format: sarif
-          output: trivy-fs.sarif
+        run: |
+          docker run --rm -v "$PWD:/src" aquasec/trivy:0.58.1 fs \
+            --scanners vuln,secret,misconfig --severity HIGH,CRITICAL \
+            --ignore-unfixed --exit-code 1 \
+            --format sarif --output /src/trivy-fs.sarif /src
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: trivy-fs-report
           path: trivy-fs.sarif
 
-  # 4. Образы всех сервисов: сборка, сканирование, публикация (только из main)
   images:
     needs: scan-deps
     runs-on: ubuntu-latest
@@ -109,14 +100,11 @@ jobs:
         run: |
           docker image ls "$IMAGE" --format '${{ matrix.service }} image size - {{.Size}}' | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Trivy image
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: ${{ env.IMAGE }}:${{ github.sha }}
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-          format: sarif
-          output: trivy-${{ matrix.service }}.sarif
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/out" aquasec/trivy:0.58.1 image \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+            --format sarif --output /out/trivy-${{ matrix.service }}.sarif \
+            "$IMAGE:${{ github.sha }}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -136,7 +124,6 @@ jobs:
           docker push "$IMAGE:${{ github.sha }}"
           docker push "$IMAGE:latest"
 
-  # 5. Дымовой тест: вся система поднимается одной командой, запрос проходит через все слои
   smoke:
     needs: images
     runs-on: ubuntu-latest
