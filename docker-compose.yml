@@ -1,0 +1,314 @@
+name: meeting-room-booking
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-java-hardening: &java-hardening
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  read_only: true
+  tmpfs: ["/tmp"]
+  mem_limit: 512m
+  pids_limit: 200
+  logging: *default-logging
+
+services:
+  postgres-reference:
+    image: postgres:15.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: reference_db
+      POSTGRES_USER: reference_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?задайте DB_PASSWORD в файле .env}
+    volumes:
+      - postgres-reference-data:/var/lib/postgresql/data
+    networks: [backend]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    mem_limit: 384m
+    pids_limit: 200
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  postgres-booking:
+    image: postgres:15.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: booking_db
+      POSTGRES_USER: booking_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?задайте DB_PASSWORD в файле .env}
+    volumes:
+      - postgres-booking-data:/var/lib/postgresql/data
+    networks: [backend]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    mem_limit: 384m
+    pids_limit: 200
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  postgres-notification:
+    image: postgres:15.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: notification_db
+      POSTGRES_USER: notification_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?задайте DB_PASSWORD в файле .env}
+    volumes:
+      - postgres-notification-data:/var/lib/postgresql/data
+    networks: [backend]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    mem_limit: 384m
+    pids_limit: 200
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  postgres-integration:
+    image: postgres:15.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: integration_db
+      POSTGRES_USER: integration_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?задайте DB_PASSWORD в файле .env}
+    volumes:
+      - postgres-integration-data:/var/lib/postgresql/data
+    networks: [backend]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    mem_limit: 384m
+    pids_limit: 200
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks: [backend]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    pids_limit: 200
+    logging: *default-logging
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    restart: unless-stopped
+    depends_on: [zookeeper]
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # внутренний листенер для контейнеров, внешний (только 127.0.0.1) для отладки с хоста
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "127.0.0.1:9092:9092"
+    networks: [backend]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 768m
+    pids_limit: 400
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:29092 --list > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    logging: *default-logging
+
+  reference-service:
+    <<: *java-hardening
+    build:
+      context: .
+      args:
+        SERVICE: reference-service
+        PORT: "8081"
+    image: mrb-reference-service:local
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-reference:5432/reference_db
+      SPRING_DATASOURCE_USERNAME: reference_user
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+    depends_on:
+      postgres-reference:
+        condition: service_healthy
+    networks: [backend]
+
+  booking-service:
+    <<: *java-hardening
+    build:
+      context: .
+      args:
+        SERVICE: booking-service
+        PORT: "8082"
+    image: mrb-booking-service:local
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-booking:5432/booking_db
+      SPRING_DATASOURCE_USERNAME: booking_user
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REFERENCE_SERVICE_URL: http://reference-service:8081
+    depends_on:
+      postgres-booking:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      reference-service:
+        condition: service_healthy
+    networks: [backend]
+
+  notification-service:
+    <<: *java-hardening
+    build:
+      context: .
+      args:
+        SERVICE: notification-service
+        PORT: "8083"
+    image: mrb-notification-service:local
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-notification:5432/notification_db
+      SPRING_DATASOURCE_USERNAME: notification_user
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REFERENCE_SERVICE_URL: http://reference-service:8081
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+    depends_on:
+      postgres-notification:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      reference-service:
+        condition: service_healthy
+    networks: [backend]
+
+  integration-service:
+    <<: *java-hardening
+    build:
+      context: .
+      args:
+        SERVICE: integration-service
+        PORT: "8084"
+    image: mrb-integration-service:local
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-integration:5432/integration_db
+      SPRING_DATASOURCE_USERNAME: integration_user
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      REFERENCE_SERVICE_URL: http://reference-service:8081
+    depends_on:
+      postgres-integration:
+        condition: service_healthy
+      reference-service:
+        condition: service_healthy
+    networks: [backend]
+
+  api-gateway:
+    <<: *java-hardening
+    build:
+      context: .
+      args:
+        SERVICE: api-gateway
+        PORT: "8080"
+    image: mrb-api-gateway:local
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      REFERENCE_SERVICE_URL: http://reference-service:8081
+      BOOKING_SERVICE_URL: http://booking-service:8082
+      NOTIFICATION_SERVICE_URL: http://notification-service:8083
+      INTEGRATION_SERVICE_URL: http://integration-service:8084
+    ports:
+      - "8080:8080"
+    depends_on:
+      reference-service:
+        condition: service_healthy
+      booking-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      integration-service:
+        condition: service_healthy
+    networks: [backend]
+
+  # ---- Мониторинг: docker compose --profile monitoring up -d ----
+  prometheus:
+    profiles: [monitoring]
+    image: prom/prometheus:v2.51.2
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on: [api-gateway]
+    networks: [backend]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    mem_limit: 512m
+    pids_limit: 100
+    logging: *default-logging
+
+  grafana:
+    profiles: [monitoring]
+    image: grafana/grafana:10.4.2
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?задайте GRAFANA_ADMIN_PASSWORD в файле .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on: [prometheus]
+    networks: [backend]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    mem_limit: 512m
+    pids_limit: 100
+    logging: *default-logging
+
+volumes:
+  postgres-reference-data:
+  postgres-booking-data:
+  postgres-notification-data:
+  postgres-integration-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  backend:
+    driver: bridge

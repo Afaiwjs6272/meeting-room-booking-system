@@ -1,0 +1,166 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 1. Линтинг Dockerfile
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: hadolint
+        run: docker run --rm -i hadolint/hadolint:v2.12.0 hadolint --failure-threshold warning - < Dockerfile
+
+  # 2. Сборка, модульные и интеграционные тесты (Testcontainers), покрытие JaCoCo
+  build-test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Build and test
+        run: mvn -B verify
+      - name: Coverage summary
+        if: always()
+        run: |
+          for csv in */target/site/jacoco/jacoco.csv; do
+            [ -f "$csv" ] || continue
+            awk -F, -v m="$(dirname "$(dirname "$(dirname "$csv")")")" 'NR>1 {miss+=$8; cov+=$9} END {if (miss+cov>0) printf "%s - line coverage %.1f%% (%d of %d)\n", m, 100*cov/(miss+cov), cov, miss+cov}' "$csv" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports
+          path: |
+            **/target/surefire-reports/
+            **/target/site/jacoco/
+
+  # 3. Сканирование зависимостей, секретов и конфигурации
+  scan-deps:
+    needs: build-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy fs
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: sarif
+          output: trivy-fs.sarif
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-fs-report
+          path: trivy-fs.sarif
+
+  # 4. Образы всех сервисов: сборка, сканирование, публикация (только из main)
+  images:
+    needs: scan-deps
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { service: reference-service, port: "8081" }
+          - { service: booking-service, port: "8082" }
+          - { service: notification-service, port: "8083" }
+          - { service: integration-service, port: "8084" }
+          - { service: api-gateway, port: "8080" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Lowercase image path
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/${{ matrix.service }}" >> "$GITHUB_ENV"
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          build-args: |
+            SERVICE=${{ matrix.service }}
+            PORT=${{ matrix.port }}
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+      - name: Image size
+        run: |
+          docker image ls "$IMAGE" --format '${{ matrix.service }} image size - {{.Size}}' | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Trivy image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: sarif
+          output: trivy-${{ matrix.service }}.sarif
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-${{ matrix.service }}
+          path: trivy-${{ matrix.service }}.sarif
+      - name: Login to GHCR
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push image
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          docker tag "$IMAGE:${{ github.sha }}" "$IMAGE:latest"
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+  # 5. Дымовой тест: вся система поднимается одной командой, запрос проходит через все слои
+  smoke:
+    needs: images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start system
+        run: |
+          cp .env.example .env
+          docker compose up -d --build --wait --wait-timeout 420
+      - name: Health and end-to-end check
+        run: |
+          curl -fsS http://localhost:8080/actuator/health
+          # справочник через шлюз
+          curl -fsS http://localhost:8080/api/v1/rooms/a0000000-0000-0000-0000-000000000001 | grep -q '"success":true'
+          # бронирование: шлюз -> booking-service -> reference-service (Feign) -> PostgreSQL -> Kafka
+          START=$(date -u -d '+400 days' +%Y-%m-%dT10:00:00)
+          END=$(date -u -d '+400 days' +%Y-%m-%dT11:00:00)
+          curl -fsS -X POST http://localhost:8080/api/v1/bookings \
+            -H 'Content-Type: application/json' \
+            -d "{\"roomId\":\"a0000000-0000-0000-0000-000000000001\",\"userId\":\"e0000000-0000-0000-0000-000000000002\",\"title\":\"smoke\",\"startTime\":\"$START\",\"endTime\":\"$END\"}" \
+            | grep -q '"success":true'
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail=200
+      - name: Stop
+        if: always()
+        run: docker compose down -v

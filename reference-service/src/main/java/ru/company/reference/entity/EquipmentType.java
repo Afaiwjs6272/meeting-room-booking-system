@@ -1,0 +1,6 @@
+package ru.company.reference.entity;
+
+public enum EquipmentType {
+    PROJECTOR, WHITEBOARD, TV_SCREEN, SPEAKER_SYSTEM, VIDEO_CONFERENCE,
+    AIR_CONDITIONING, INTERACTIVE_PANEL, DOCUMENT_CAMERA, OTHER
+}

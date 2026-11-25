@@ -1,0 +1,67 @@
+spring:
+  application:
+    name: integration-service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5435/integration_db
+    username: integration_user
+    password: password
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+server:
+  port: 8084
+
+reference:
+  service:
+    url: http://localhost:8081
+
+integration:
+  onc:
+    enabled: false
+    base-url: http://onec-server:8080
+  ldap:
+    enabled: false
+    url: ldap://localhost:389
+    base-dn: dc=company,dc=com
+
+logging:
+  level:
+    root: INFO
+    ru.company: ${LOG_LEVEL:INFO}
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: 100ms,300ms,1s

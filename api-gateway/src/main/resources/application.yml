@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        - id: reference-service
+          uri: ${REFERENCE_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/employees/**, /api/v1/offices/**, /api/v1/rooms/**, /api/v1/departments/**
+
+        - id: booking-service
+          uri: ${BOOKING_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/bookings/**, /api/v1/reminders/**
+
+        - id: notification-service
+          uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/notifications/**
+
+        - id: integration-service
+          uri: ${INTEGRATION_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/v1/sync/**
+
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 30s
+
+server:
+  port: 8080
+
+logging:
+  level:
+    root: INFO
+    ru.company: ${LOG_LEVEL:INFO}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: 100ms,300ms,1s
