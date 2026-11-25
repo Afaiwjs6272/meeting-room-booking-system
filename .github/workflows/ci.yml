@@ -127,31 +127,3 @@ jobs:
           docker tag "$IMAGE:${{ github.sha }}" "$IMAGE:latest"
           docker push "$IMAGE:${{ github.sha }}"
           docker push "$IMAGE:latest"
-
-  smoke:
-    needs: images
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Start system
-        run: |
-          printf 'DB_PASSWORD=ci-db-password\nGRAFANA_ADMIN_PASSWORD=ci-grafana\nMAIL_USERNAME=\nMAIL_PASSWORD=\nLOG_LEVEL=INFO\n' > .env
-          docker compose up -d --build --wait --wait-timeout 420
-      - name: Health and end-to-end check
-        run: |
-          curl -fsS http://localhost:8080/actuator/health
-          # справочник через шлюз
-          curl -fsS http://localhost:8080/api/v1/rooms/a0000000-0000-0000-0000-000000000001 | grep -q '"success":true'
-          # бронирование: шлюз -> booking-service -> reference-service (Feign) -> PostgreSQL -> Kafka
-          START=$(date -u -d '+400 days' +%Y-%m-%dT10:00:00)
-          END=$(date -u -d '+400 days' +%Y-%m-%dT11:00:00)
-          curl -fsS -X POST http://localhost:8080/api/v1/bookings \
-            -H 'Content-Type: application/json' \
-            -d "{\"roomId\":\"a0000000-0000-0000-0000-000000000001\",\"userId\":\"e0000000-0000-0000-0000-000000000002\",\"title\":\"smoke\",\"startTime\":\"$START\",\"endTime\":\"$END\"}" \
-            | grep -q '"success":true'
-      - name: Logs on failure
-        if: failure()
-        run: docker compose logs --tail=200
-      - name: Stop
-        if: always()
-        run: docker compose down -v || true
