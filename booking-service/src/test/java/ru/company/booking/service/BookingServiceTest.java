@@ -156,7 +156,7 @@ class BookingServiceTest {
         Booking saved = savedCaptor.getValue();
         assertThat(saved.getStatus()).isEqualTo(BookingStatus.CONFIRMED);
         assertThat(saved.getReminderSent()).isFalse();
-        assertThat(saved.getParticipantIds()).containsExactly("u-2", "u-3");
+        assertThat(saved.getParticipantIds()).containsExactly("u-221", "u-3");
 
         // 1 booking event + 1 notification to organizer + 2 notifications for participants
         verify(eventPublisher).publishBookingEvent(any(BookingEvent.class));
@@ -166,12 +166,12 @@ class BookingServiceTest {
     @Test
     void createBooking_noParticipants_publishesOnlyOrganizerNotification() {
         CreateBookingRequest req = CreateBookingRequest.builder()
-                .roomId("r-1").userId("u-1").title("T")
+                .roomId("r-121").userId("u-1").title("T")
                 .startTime(LocalDateTime.of(2030, 1, 1, 10, 0))
                 .endTime(LocalDateTime.of(2030, 1, 1, 11, 0))
                 .build();
         when(referenceServiceClient.getRoom("r-1")).thenReturn(sampleRoom());
-        when(referenceServiceClient.getEmployee("u-1")).thenReturn(sampleUser("u-1"));
+        when(referenceServiceClient.getEmployee("u-1")).thenReturn(sampleUser("u-123"));
         when(bookingRepository.findOverlappingBookings(anyString(), any(), any()))
                 .thenReturn(Collections.emptyList());
         when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> {
