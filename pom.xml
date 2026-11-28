@@ -41,6 +41,7 @@
         <micrometer.version>1.16.6</micrometer.version>
         <bouncycastle.version>1.85</bouncycastle.version> <!-- Обновлено до безопасной версии -->
         <lz4.version>1.11.4</lz4.version> <!-- Обновлено до безопасной версии -->
+        <netty.version>4.1.137.Final</netty.version>
     </properties>
 
     <dependencyManagement>
@@ -87,8 +88,6 @@
                 <artifactId>kafka</artifactId>
                 <version>${testcontainers.version}</version>
             </dependency>
-
-            <!-- Явное управление уязвимыми библиотеками -->
             <dependency>
                 <groupId>org.postgresql</groupId>
                 <artifactId>postgresql</artifactId>
@@ -116,6 +115,37 @@
                 <artifactId>spring-data-commons</artifactId>
                 <version>3.5.12</version>
             </dependency>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-gateway-server</artifactId>
+                <version>4.3.2</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>33.7.2-jre</version>
+            </dependency>
+            <dependency>
+                <groupId>com.thoughtworks.xstream</groupId>
+                <artifactId>xstream</artifactId>
+                <version>1.4.21</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents.core5</groupId>
+                <artifactId>httpcore5</artifactId>
+                <version>5.4.3</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents.core5</groupId>
+                <artifactId>httpcore5-h2</artifactId>
+                <version>5.4.3</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-io</groupId>
+                <artifactId>commons-io</artifactId>
+                <version>2.22.0</version>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 
