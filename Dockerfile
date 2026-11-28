@@ -2,7 +2,7 @@
 # Сборка: docker build --build-arg SERVICE=booking-service --build-arg PORT=8082 -t mrb-booking-service .
 
 # ---------- Этап 1: сборка ----------
-FROM maven:3.9.6-eclipse-temurin-17 AS build
+FROM maven:latest AS build
 ARG SERVICE
 WORKDIR /workspace
 COPY . .
