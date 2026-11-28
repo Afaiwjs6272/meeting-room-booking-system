@@ -6,10 +6,17 @@ FROM maven:3.9.6-eclipse-temurin-17 AS build
 ARG SERVICE
 WORKDIR /workspace
 COPY . .
-# Кэш локального репозитория Maven между сборками; тесты и покрытие (JaCoCo) выполняются отдельным заданием CI.
-# Повторы загрузки защищают от обрывов сети при скачивании зависимостей.
+
+# Создаем файл настроек с зеркалом Aliyun для обхода сетевых сбоев
+RUN echo '<settings><mirrors><mirror><id>aliyunmaven</id><mirrorOf>central</mirrorOf><url>https://maven.aliyun.com/repository/public</url></mirror></mirrors></settings>' > /tmp/settings.xml
+
+# Сборка с использованием зеркала, увеличенными таймаутами и повторными попытками
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -B -q -Daether.connector.http.retryHandler.count=5 -Djacoco.skip=true \
+    mvn -B -q -s /tmp/settings.xml \
+        -Daether.connector.http.retryHandler.count=10 \
+        -Dmaven.wagon.http.connectionTimeout=60000 \
+        -Dmaven.wagon.http.readTimeout=60000 \
+        -Djacoco.skip=true \
         -pl "${SERVICE}" -am package -DskipTests \
     && cp "${SERVICE}"/target/*.jar /workspace/app.jar
 
@@ -19,8 +26,13 @@ ARG SERVICE
 ARG PORT=8080
 LABEL org.opencontainers.image.title="${SERVICE}"
 
-# Непривилегированный пользователь без оболочки входа
-RUN addgroup -S app && adduser -S -G app -H -s /sbin/nologin app
+# 1. Обновляем системные пакеты Alpine (исправляет CVE в libcrypto3, libexpat, musl и т.д.)
+# 2. Создаем непривилегированного пользователя без оболочки входа
+# 3. Удаляем кэш apk, чтобы уменьшить размер финального образа
+RUN apk update && apk upgrade --no-cache \
+    && addgroup -S app && adduser -S -G app -H -s /sbin/nologin app \
+    && rm -rf /var/cache/apk/*
+
 WORKDIR /app
 COPY --from=build --chown=app:app /workspace/app.jar /app/app.jar
 USER app

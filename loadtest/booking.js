@@ -34,7 +34,7 @@ export const options = {
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 const pad = (n) => String(n).padStart(2, '0');
 const fmt = (d) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}` +
-                   `T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:00`;
+    `T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:00`;
 
 // Общая для всех виртуальных пользователей «соль» прогона, чтобы слоты не пересекались между запусками.
 export function setup() {
@@ -47,9 +47,9 @@ export default function (data) {
 
   // чтение через шлюз: комната (reference-service) и бронирования пользователя (booking-service)
   check(http.get(`${BASE}/api/v1/rooms/${room}`, { tags: { name: 'room-get' } }),
-        { 'room 200': (r) => r.status === 200 });
+      { 'room 200': (r) => r.status === 200 });
   check(http.get(`${BASE}/api/v1/bookings/user/${user}`, { tags: { name: 'bookings-by-user' } }),
-        { 'bookings 200': (r) => r.status === 200 });
+      { 'bookings 200': (r) => r.status === 200 });
 
   // запись: уникальный двухчасовой слот на каждую пару (VU, итерация) — конфликтов нет
   const start = new Date(data.base + (__VU * 500 + __ITER) * 2 * 3600000);
@@ -63,7 +63,7 @@ export default function (data) {
     endTime: fmt(end),
   });
   check(http.post(`${BASE}/api/v1/bookings`, body, { headers: JSON_HEADERS, tags: { name: 'booking-create' } }),
-        { 'booking 201': (r) => r.status === 201 });
+      { 'booking 201': (r) => r.status === 201 });
 
   sleep(0.5 + Math.random());
 }

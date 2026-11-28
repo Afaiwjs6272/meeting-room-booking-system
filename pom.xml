@@ -1,4 +1,5 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>ru.company</groupId>
     <artifactId>meeting-room-booking-system</artifactId>
@@ -14,22 +15,34 @@
         <module>notification-service</module>
         <module>integration-service</module>
     </modules>
+
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.4.11</version>
+        <version>3.5.14</version>
         <relativePath/>
     </parent>
+
     <properties>
         <java.version>17</java.version>
-        <spring-cloud.version>2024.0.2</spring-cloud.version>
+        <spring-cloud.version>2025.0.0</spring-cloud.version>
         <testcontainers.version>1.20.6</testcontainers.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <lombok.version>1.18.30</lombok.version>
         <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
         <jacoco.version>0.8.12</jacoco.version>
-        <postgresql.version>42.7.11</postgresql.version>
+
+        <!-- ПЕРЕОПРЕДЕЛЕНИЯ ДЛЯ БЕЗОПАСНОСТИ (обновлено по результатам Trivy) -->
+        <postgresql.version>42.7.12</postgresql.version>
+        <tomcat.version>10.1.61</tomcat.version> <!-- Обновлено до безопасной версии -->
+        <jackson-bom.version>2.18.11</jackson-bom.version> <!-- Обновлено до безопасной версии -->
+        <spring-framework.version>6.2.19</spring-framework.version> <!-- Максимальная для Spring Boot 3.5 -->
+        <spring-kafka.version>3.3.16</spring-kafka.version>
+        <micrometer.version>1.16.6</micrometer.version>
+        <bouncycastle.version>1.85</bouncycastle.version> <!-- Обновлено до безопасной версии -->
+        <lz4.version>1.11.4</lz4.version> <!-- Обновлено до безопасной версии -->
     </properties>
+
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -74,8 +87,38 @@
                 <artifactId>kafka</artifactId>
                 <version>${testcontainers.version}</version>
             </dependency>
+
+            <!-- Явное управление уязвимыми библиотеками -->
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${postgresql.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <!-- Trivy нашел lz4-java под другим groupId (at.yawk.lz4) -->
+            <dependency>
+                <groupId>at.yawk.lz4</groupId>
+                <artifactId>lz4-java</artifactId>
+                <version>${lz4.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-fileupload</groupId>
+                <artifactId>commons-fileupload</artifactId>
+                <version>1.6.0</version>
+            </dependency>
+            <!-- Trivy требовал 3.5.12 -->
+            <dependency>
+                <groupId>org.springframework.data</groupId>
+                <artifactId>spring-data-commons</artifactId>
+                <version>3.5.12</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
+
     <build>
         <pluginManagement>
             <plugins>
